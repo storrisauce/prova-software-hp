@@ -1,8 +1,13 @@
 # Strumento interno — domande alle wiki aziendali
 
-Prima versione minima (scheletro): un utente fa login, scrive una domanda, e riceve
-una risposta costruita leggendo le wiki aziendali ("cervelli") a cui il suo ruolo dà
-accesso, con indicate le pagine usate.
+Prima versione minima (scheletro): un utente scrive una domanda e riceve una
+risposta costruita leggendo le wiki aziendali ("cervelli"), con indicate le pagine
+usate.
+
+> **Il login è disattivato per ora, su richiesta esplicita, per questa fase di
+> prova**: chiunque abbia l'indirizzo del sito può fare domande, senza il filtro
+> per permessi. Il codice e le tabelle del login/permessi ci sono ancora, solo
+> spenti — vedi la sezione 6 per come e dove riaccenderli quando serve.
 
 ## Indice
 
@@ -12,6 +17,7 @@ accesso, con indicate le pagine usate.
 4. [Come registro un nuovo cervello](#4-come-registro-un-nuovo-cervello)
 5. [Come funziona il giro completo di una domanda](#5-come-funziona-il-giro-completo-di-una-domanda-spiegazione-semplice)
 6. [Note e limiti di questa prima versione](#6-note-e-limiti-di-questa-prima-versione)
+7. [Come si aggiornano il sito e il database dopo una modifica](#7-come-si-aggiornano-il-sito-e-il-database-dopo-una-modifica)
 
 ---
 
@@ -38,8 +44,8 @@ Serve Node.js installato (versione 20 o superiore) e un account su
    ```
    npm run dev
    ```
-6. Apri `http://localhost:3000` nel browser: vedrai la pagina di login. Per entrare
-   serve un utente già creato su Supabase (vedi sezione 3).
+6. Apri `http://localhost:3000` nel browser: vedrai subito il modulo per fare una
+   domanda (il login è disattivato per ora, vedi la nota in cima a questo file).
 
 Per il deploy su Vercel: collega la repository GitHub del progetto a un nuovo
 progetto Vercel, imposta le stesse variabili d'ambiente (sezione 2) nelle
@@ -103,6 +109,10 @@ da solo all'indirizzo giusto di Anthropic. L'unica cosa che ti serve è la chiav
   basta un nuovo push su GitHub, che ne avvia uno nuovo).
 
 ## 3. Come creo un utente e gli assegno i permessi
+
+> Con il login disattivato (vedi nota in cima), questi passaggi non hanno ancora
+> effetto sull'app: chiunque può fare domande senza bisogno di un utente. Restano
+> comunque validi per quando il login verrà riattivato, e puoi già prepararli.
 
 Non c'è nessuna pagina di registrazione nell'app: gli utenti si creano solo dal
 pannello di Supabase, in due passaggi.
@@ -182,6 +192,11 @@ come punto di partenza per orientarsi tra le pagine.
 
 ## 5. Come funziona il giro completo di una domanda (spiegazione semplice)
 
+Questa è la spiegazione del funzionamento "a regime", con il login attivo. Nella
+versione attuale il passo 1 non c'è (nessun login) e al passo 3 il server prende
+in considerazione tutte le wiki attive invece di filtrarle per permessi — il resto
+funziona esattamente come descritto.
+
 1. La persona fa login con email e password: chi verifica che siano corrette è
    Supabase, la nostra applicazione non vede né conserva mai la password.
 2. La persona scrive una domanda e preme "Invia".
@@ -195,11 +210,11 @@ come punto di partenza per orientarsi tra le pagine.
    proprio come farebbe una persona: apre una pagina, ci trova dei collegamenti ad
    altre pagine, e li segue se pensa che siano utili — anche passando da una wiki
    all'altra, se entrambe sono permesse. Ogni volta che Claude chiede di aprire una
-   pagina, il server ricontrolla che quella wiki sia davvero tra quelle permesse a
-   questa persona, prima di consegnargliela: è l'unico punto in cui questo
-   controllo viene fatto, ed è sempre attivo. Per evitare che il giro duri
-   all'infinito, dopo 8 pagine aperte il sistema obbliga Claude a rispondere con
-   quello che ha trovato fino a quel momento.
+   pagina, il server ricontrolla che quella wiki sia valida e attiva prima di
+   consegnargliela: è l'unico punto in cui questo controllo viene fatto, ed è
+   sempre attivo. Per evitare che il giro duri all'infinito, dopo 8 pagine aperte
+   il sistema obbliga Claude a rispondere con quello che ha trovato fino a quel
+   momento.
 6. Claude scrive la risposta finale, citando le pagine che ha usato, e dice
    chiaramente se non ha trovato l'informazione richiesta, invece di inventarla.
 7. La persona vede la risposta e, sotto, l'elenco delle pagine effettivamente
@@ -211,10 +226,20 @@ come punto di partenza per orientarsi tra le pagine.
 
 Cose che ho deciso io in fase di costruzione e che è bene tu sappia:
 
-- **Permessi applicati in un solo punto**: tutta la logica di "chi può leggere
-  cosa" vive esclusivamente in `src/app/api/chiedi/route.ts` (cercalo, è
-  commentato in modo evidente). Il database ha la sicurezza a livello di riga
-  (RLS) attiva su tutte le tabelle ma senza regole che aprano l'accesso dal
+- **Login disattivato per ora, su tua richiesta**: `src/app/api/chiedi/route.ts`
+  non controlla più la sessione né filtra i cervelli per permessi (vedi il blocco
+  commentato "LOGIN DISATTIVATO PER ORA" al suo interno) — vengono usati tutti i
+  cervelli con `attivo = true`. `src/app/page.tsx` e `src/app/chiedi/page.tsx` non
+  reindirizzano più al login. Non ho cancellato nulla: `src/app/login-form.tsx`,
+  `src/lib/supabase/client.ts` e `src/lib/supabase/server.ts` sono rimasti
+  invariati e pronti per essere ricollegati, e le tabelle `utenti`, `permessi`,
+  `utenti_permessi` restano nel database. Per riaccenderlo bisogna ripristinare il
+  controllo sessione e il filtro per permessi in quei tre file (la versione
+  precedente è nella cronologia git).
+- **Permessi applicati in un solo punto**: quando il login sarà di nuovo attivo,
+  tutta la logica di "chi può leggere cosa" tornerà a vivere esclusivamente in
+  `src/app/api/chiedi/route.ts`. Il database ha comunque la sicurezza a livello di
+  riga (RLS) attiva su tutte le tabelle, senza regole che aprano l'accesso dal
   browser: solo il server, con la chiave `SUPABASE_SERVICE_ROLE_KEY`, può
   leggerle.
 - **Costo stimato, non esatto**: la colonna `costo` nel log è calcolata
@@ -222,19 +247,51 @@ Cose che ho deciso io in fase di costruzione e che è bene tu sappia:
   (`src/app/api/chiedi/route.ts`, costante `PREZZO_PER_MILIONE_TOKEN`). Se
   Anthropic cambia i prezzi del modello, va aggiornata quella costante — è un
   numero indicativo, non una fattura.
-- **Niente pagina di logout dedicata**: ho aggiunto un semplice link "Esci" nella
-  pagina della domanda, per poter testare con utenti diversi, anche se non era
-  esplicitamente richiesto.
+- **`log.utente_id` ora può restare vuoto**: senza login non c'è più un utente da
+  registrare per ogni domanda, quindi ho tolto il vincolo "obbligatorio" da questa
+  colonna (migration `0006_log_utente_id_nullable.sql`). Quando il login torna, si
+  può ripristinare l'obbligo.
 - **Niente rinnovo automatico della sessione in background** (il cosiddetto
-  `middleware.ts` di Next.js): per restare minimi, la sessione viene controllata
-  direttamente in ogni pagina. Effetto pratico: se una persona resta con la pagina
-  aperta senza fare nulla per molto tempo, potrebbe doversi rifare il login prima
-  del normale. Facile da aggiungere in seguito se diventa un problema.
+  `middleware.ts` di Next.js): per restare minimi, la sessione veniva controllata
+  direttamente in ogni pagina (tornerà rilevante quando il login sarà riattivo).
 - **Cache in memoria**: le pagine GitHub lette restano in cache per 10 minuti,
   come richiesto. Su Vercel questa cache vive dentro una singola istanza del
   server: aiuta molto durante la stessa richiesta (quando Claude rilegge una
   pagina già aperta) ma non è garantita da una richiesta all'altra.
+- **Aspetto grafico**: ho aggiunto uno stile semplice (`src/app/globals.css`) —
+  niente framework grafico installato, solo CSS scritto a mano.
 
 Tabelle, colonne e la struttura dei file sono descritte per esteso nella
 conversazione in cui abbiamo progettato questo strumento; le migration SQL sono in
 `supabase/migrations/`.
+
+## 7. Come si aggiornano il sito e il database dopo una modifica
+
+**Codice**: quando faccio una modifica, la applico direttamente alla repository
+GitHub del progetto (commit + push). Non tocco file solo "in locale": tutto quello
+che vedi qui arriva già pubblicato su GitHub.
+
+**Vercel non si aggiorna sempre da solo sul sito principale.** Quando importi un
+progetto GitHub su Vercel, di norma succede questo:
+- Vercel guarda un branch "di produzione" (di solito `main`) per il sito
+  definitivo, quello con l'indirizzo principale.
+- Ogni push su un **altro** branch (compreso quello che sto usando io per questo
+  progetto) genera invece, in automatico, un **Preview Deployment**: un indirizzo
+  temporaneo e separato, che trovi nella scheda **Deployments** del progetto su
+  Vercel, cercando il nome del branch.
+
+Quindi le mie modifiche arrivano già online su un indirizzo di anteprima ad ogni
+push, ma **non aggiornano da sole il sito principale** finché quel branch non
+diventa (o non viene unito a) il branch di produzione. Per farle diventare
+definitive hai due strade:
+
+1. **Unire il branch a `main`** con una Pull Request su GitHub (posso aprirla io,
+   se me lo chiedi esplicitamente — poi va confermata/unita da un umano, a meno
+   che tu non mi dica di farlo anche io).
+2. **Cambiare il branch di produzione su Vercel**: Project Settings → Git →
+   "Production Branch", e mettere il branch che sto usando al posto di `main`.
+   Più comodo in questa fase di prova, se vuoi vedere ogni modifica online subito
+   senza passare da una Pull Request.
+
+In ogni caso, dopo ogni mio push, controlla la scheda **Deployments** su Vercel: se
+una build fallisce (es. per una variabile d'ambiente mancante), lo vedi lì.

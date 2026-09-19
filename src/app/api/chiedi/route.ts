@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { createClient } from '@/lib/supabase/server'
 import { leggiIndice, leggiPagina, type Cervello } from '@/lib/cervelli'
 
 export const runtime = 'nodejs'
@@ -32,59 +31,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ errore: 'Manca la domanda.' }, { status: 400 })
   }
 
-  // --- 1. Verifica la sessione Supabase -------------------------------------
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return NextResponse.json({ errore: 'Non autenticato.' }, { status: 401 })
-  }
-
-  // Da qui in poi usiamo la service role key: è QUESTO codice, non il browser, a
-  // decidere cosa l'utente può vedere. Vedi il blocco marcato più sotto.
   const db = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  const { data: utente } = await db
-    .from('utenti')
-    .select('attivo')
-    .eq('id', user.id)
-    .single()
-
-  if (!utente || !utente.attivo) {
-    return NextResponse.json({ errore: 'Utente non configurato o non attivo.' }, { status: 403 })
-  }
-
-  // --- 2. Permessi dell'utente -> cervelli consultabili -----------------------
-  const { data: righePermessi } = await db
-    .from('utenti_permessi')
-    .select('scade_il, permessi(codice)')
-    .eq('utente_id', user.id)
-
-  const adesso = Date.now()
-  const codiciPermessiValidi = (righePermessi ?? [])
-    .filter((riga) => !riga.scade_il || new Date(riga.scade_il).getTime() > adesso)
-    .map((riga) => (riga.permessi as unknown as { codice: string } | null)?.codice)
-    .filter((codice): codice is string => Boolean(codice))
-
-  let cervelliPermessi: CervelloRiga[] = []
-
-  if (codiciPermessiValidi.length > 0) {
-    const { data } = await db
-      .from('cervelli')
-      .select('*')
-      .eq('attivo', true)
-      .in('permesso_richiesto', codiciPermessiValidi)
-    cervelliPermessi = (data as CervelloRiga[] | null) ?? []
-  }
+  // ============================================================================
+  // LOGIN DISATTIVATO PER ORA (richiesta esplicita, versione di prova aperta a
+  // tutti). In questa versione ogni cervello attivo è visibile a chiunque usi lo
+  // strumento: il controllo sessione e il filtro per permessi sono stati tolti
+  // da QUI, non dal database — le tabelle utenti / permessi / utenti_permessi
+  // restano intatte e pronte per quando il login tornerà.
+  //
+  // Per riattivarlo:
+  // 1. Ripristina qui il controllo della sessione Supabase e il filtro dei
+  //    cervelli in base ai permessi dell'utente (vedi la cronologia git di
+  //    questo file per la versione precedente).
+  // 2. Ripristina i redirect in src/app/page.tsx e src/app/chiedi/page.tsx.
+  // ============================================================================
+  const { data } = await db.from('cervelli').select('*').eq('attivo', true)
+  const cervelliPermessi = (data as CervelloRiga[] | null) ?? []
 
   if (cervelliPermessi.length === 0) {
-    return NextResponse.json({ errore: 'Non hai accesso a nessun cervello.' }, { status: 403 })
+    return NextResponse.json({ errore: 'Nessun cervello disponibile.' }, { status: 404 })
   }
 
   // --- 3. Mappa unica: solo gli indici dei cervelli permessi ------------------
@@ -123,7 +93,7 @@ export async function POST(request: Request) {
     },
   ]
 
-  const promptDiSistema = `Hai a disposizione una mappa delle wiki aziendali (i "cervelli") a cui questo utente ha accesso. La mappa contiene, per ciascun cervello permesso, l'indice delle sue pagine.
+  const promptDiSistema = `Hai a disposizione una mappa delle wiki aziendali (i "cervelli") disponibili. La mappa contiene, per ciascun cervello, l'indice delle sue pagine.
 
 Per leggere il contenuto integrale di una pagina usa lo strumento leggi_pagina(cervello, percorso), indicando lo slug del cervello e il percorso esatto del file così come appare nella mappa o nei collegamenti trovati nelle pagine già lette.
 
@@ -177,10 +147,13 @@ ${mappa}`
       numeroLetture += 1
 
       // ==========================================================================
-      // PUNTO 5 — UNICO POSTO IN CUI I PERMESSI VENGONO APPLICATI.
+      // PUNTO 5 — UNICO POSTO IN CUI VENGONO VALIDATE LE RICHIESTE DEL MODELLO.
       // Il token GitHub vede tutte le repository: è questo blocco, e solo questo,
-      // a decidere cosa l'utente ha diritto di vedere. Non aggirare né duplicare
-      // questa logica altrove (es. non fidarsi di ciò che il modello dichiara).
+      // a decidere cosa arriva davvero al modello (cervello valido e attivo,
+      // percorso sicuro, file .md). Con il login disattivato non c'è più un
+      // filtro per singolo utente, ma questo controllo resta comunque: non
+      // aggirarlo né duplicarlo altrove (es. non fidarsi di ciò che il modello
+      // dichiara).
       // ==========================================================================
       let testoRisultato: string
       let isError = false
@@ -193,7 +166,7 @@ ${mappa}`
         const cervello = cervelliPermessi.find((c) => c.slug === input.cervello)
 
         if (!cervello) {
-          testoRisultato = `Il cervello "${input.cervello}" non esiste o non sei autorizzato a consultarlo.`
+          testoRisultato = `Il cervello "${input.cervello}" non esiste o non è attivo.`
           isError = true
         } else if (!input.percorso || input.percorso.includes('..') || input.percorso.startsWith('/')) {
           testoRisultato = 'Percorso non valido.'
@@ -239,7 +212,7 @@ ${mappa}`
 
   // --- 8. Log ------------------------------------------------------------------
   await db.from('log').insert({
-    utente_id: user.id,
+    utente_id: null,
     domanda,
     risposta: testoFinale,
     pagine_lette: pagineLette,

@@ -1,13 +1,10 @@
 'use client'
 
 import { useState, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 
 type PaginaLetta = { cervello: string; percorso: string }
 
 export function ChiediForm() {
-  const router = useRouter()
   const [domanda, setDomanda] = useState('')
   const [risposta, setRisposta] = useState<string | null>(null)
   const [pagineLette, setPagineLette] = useState<PaginaLetta[]>([])
@@ -43,41 +40,36 @@ export function ChiediForm() {
     }
   }
 
-  async function handleEsci() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/')
-    router.refresh()
-  }
-
   return (
     <div>
       <form onSubmit={handleSubmit}>
-        <textarea
-          value={domanda}
-          onChange={(e) => setDomanda(e.target.value)}
-          placeholder="Scrivi la tua domanda"
-          rows={4}
-          cols={60}
-          required
-        />
-        <br />
+        <div>
+          <label htmlFor="domanda">Domanda</label>
+          <textarea
+            id="domanda"
+            value={domanda}
+            onChange={(e) => setDomanda(e.target.value)}
+            placeholder="Scrivi la tua domanda"
+            rows={4}
+            required
+          />
+        </div>
         <button type="submit" disabled={caricamento}>
           {caricamento ? 'Sto cercando...' : 'Invia'}
         </button>
       </form>
 
-      {errore && <p>{errore}</p>}
+      {errore && <p className="errore">{errore}</p>}
 
       {risposta && (
-        <div>
+        <div className="risposta">
           <h2>Risposta</h2>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{risposta}</p>
+          <p>{risposta}</p>
 
           {pagineLette.length > 0 && (
             <>
               <h3>Pagine consultate</h3>
-              <ul>
+              <ul className="pagine-lette">
                 {pagineLette.map((pagina, indice) => (
                   <li key={indice}>
                     {pagina.cervello} / {pagina.percorso}
@@ -88,11 +80,6 @@ export function ChiediForm() {
           )}
         </div>
       )}
-
-      <hr />
-      <button type="button" onClick={handleEsci}>
-        Esci
-      </button>
     </div>
   )
 }

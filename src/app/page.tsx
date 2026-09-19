@@ -1,21 +1,10 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import { LoginForm } from './login-form'
 
-export default async function PaginaLogin() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (user) {
-    redirect('/chiedi')
-  }
-
-  return (
-    <main>
-      <h1>Accedi</h1>
-      <LoginForm />
-    </main>
-  )
+// Login disattivato per ora (vedi il commento in src/app/api/chiedi/route.ts):
+// la pagina di ingresso porta direttamente al modulo della domanda.
+// Per riattivare il login, rimetti qui il controllo sessione + <LoginForm />
+// (il file src/app/login-form.tsx è rimasto invariato, pronto per essere
+// ricollegato).
+export default function Root() {
+  redirect('/chiedi')
 }
