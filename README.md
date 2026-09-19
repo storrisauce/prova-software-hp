@@ -61,11 +61,46 @@ contenuto delle repository che userai come cervelli (basta l'accesso in lettura,
 serve scrittura). Vede tutte le repository a cui ha accesso: è il codice
 dell'applicazione, non il token, a decidere cosa un utente può davvero leggere.
 
-**Dove le metti:**
-- **In locale**: nel file `.env.local` nella radice del progetto (non su Git).
-- **Su Vercel**: Project Settings → Environment Variables, stesso nome e stesso
-  valore di ognuna, per l'ambiente "Production" (e "Preview" se lo usi). I valori
-  non li scrivo io da nessuna parte nel codice: li inserisci tu direttamente lì.
+**Claude non ha un "indirizzo" (endpoint) da configurare**: il codice si collega già
+da solo all'indirizzo giusto di Anthropic. L'unica cosa che ti serve è la chiave
+`ANTHROPIC_API_KEY`.
+
+### Come ottieni la chiave Anthropic
+
+1. Vai su [console.anthropic.com](https://console.anthropic.com) e accedi (o crea
+   l'account dell'azienda, se non esiste ancora).
+2. Vai nella sezione "API Keys" → "Create Key".
+3. Copia la chiave (inizia con `sk-ant-...`): viene mostrata una sola volta, salvala
+   subito da qualche parte al sicuro.
+
+### Come ottieni il token GitHub
+
+1. Su GitHub: foto profilo in alto a destra → **Settings**.
+2. In fondo al menu a sinistra: **Developer settings**.
+3. **Personal access tokens** → **Fine-grained tokens** → **Generate new token**.
+4. In "Repository access" scegli **Only select repositories** e seleziona solo le
+   repository delle wiki (i cervelli) — non serve dare accesso a tutta la tua
+   organizzazione.
+5. In "Permissions" → "Repository permissions" → **Contents** imposta **Read-only**
+   (è l'unico permesso necessario).
+6. Genera e copia il token (inizia con `github_pat_...`).
+
+### Dove inserisci tutti questi valori
+
+- **In locale**: apri il file `.env.local` (creato al punto 1 copiando
+  `.env.example`) e incolla ogni valore dopo il segno `=`, ad esempio
+  `ANTHROPIC_API_KEY=sk-ant-...`. Se lo modifichi mentre `npm run dev` è già
+  acceso, riavvialo perché legga il nuovo valore.
+- **Su Vercel**: apri il progetto su vercel.com → scheda **Settings** in alto →
+  **Environment Variables** nel menu a sinistra → **Add New** → nel campo "Key"
+  scrivi il nome esatto della variabile (es. `ANTHROPIC_API_KEY`), nel campo
+  "Value" incolla il valore, spunta almeno "Production" → **Save**. Ripeti per
+  ognuna delle 5 variabili. I valori non li scrivo mai io nel codice: li inserisci
+  solo tu, qui.
+- **Importante**: dopo aver aggiunto o modificato una variabile su Vercel, i deploy
+  già fatti in passato NON la vedono automaticamente. Serve un nuovo deploy: dalla
+  scheda "Deployments", sui tre puntini dell'ultimo deploy → **Redeploy** (oppure
+  basta un nuovo push su GitHub, che ne avvia uno nuovo).
 
 ## 3. Come creo un utente e gli assegno i permessi
 
